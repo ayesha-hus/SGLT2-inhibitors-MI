@@ -76,40 +76,5 @@ t.test(age ~ adherence_flg, data = SGLT2_only)
 
 t.test(bmi_bl ~ adherence_flg, data = SGLT2_only)
 
-#### Logistic regression for aim 1 ####
-
-# No crude analysis as variables are being treated as "predictor" variables
-
-adherence_char_fit <- glm(adherence_flg ~ bmi_bl + age + sex, family = "binomial", data = SGLT2_only)
-summary(adherence_char_fit)
-
-exp(coef(adherence_char_fit))
-exp(confint.default(adherence_char_fit))
-
-#### Sensitivity analysis ####
-
-# Do our observations hold when restricting bmi to overweight> individuals
-
-SGLT2_BMI_25 <- SGLT2_only%>%
-  filter(bmi_bl >= 25.0)
-
-fit_sensitivity <- glm(adherence_flg ~ bmi_bl + age + sex, family = "binomial", data = SGLT2_BMI_25)
-summary(fit_sensitivity)
-
-exp(coef(fit_sensitivity))
-exp(confint.default(fit_sensitivity))
-
-# comparing bmi cat against bmi continuous to check for non linearity
-
-SGLT2_only$bmi_cat <- cut(
-  SGLT2_only$bmi_bl,
-  breaks = c(-Inf, 25, 30, Inf),
-  labels = c("Normal weight (<25)", "Overweight (25-29.9)", "Obese (≥30)"),
-  right = FALSE
-)
-
-fit_cat <- glm(adherence_flg ~ bmi_cat + age + sex, family = "binomial", data = SGLT2_only)
-summary(fit_cat)
-
 exp(coef(fit_cat))
 exp(confint.default(fit_cat))
