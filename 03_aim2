@@ -1,0 +1,182 @@
+#### Creating time_years and event column for KM and CPH analysis ####
+
+# Need to define time_months column and event column
+
+# Creating the time_months column
+
+SGLT2$mi2_months <- time_length(interval(SGLT2$randomisation_dte, SGLT2$mi_dte), "months")
+
+SGLT2$trial_months <- time_length(interval(SGLT2$randomisation_dte, SGLT2$endfup_dte), "months")
+
+SGLT2$time_months <- ifelse(!is.na(SGLT2$mi2_months), SGLT2$mi2_months, SGLT2$trial_months)
+
+# Converting to time_years
+
+SGLT2$time_years <- SGLT2$time_months/12
+
+
+# Event column is mi_flg column (1 <- had MI, 0 <- did not have MI)
+# Participants without a secondary MI were censored at the end of follow-up (5 years post-randomisation)
+
+#### Overall KM 5 year free MI plot ####
+
+library(survminer)
+library(survival)
+
+overall_km <- survfit(Surv(time_years, mi_flg) ~ 1, data = SGLT2)
+
+summary(overall_km)
+
+ggsurvplot(
+  overall_km,
+  data = SGLT2,
+  conf.int = TRUE,
+  pval = TRUE,
+  risk.table = TRUE,
+  xlab = "Time (years)",
+  ylab = "Secondary MI-free Probability",
+  title = "Secondary MI-free Proability Kaplan-Meier Plot",
+  ggtheme = theme_minimal()
+)
+
+
+summary(overall_km)$table
+
+# Analysis of MI free probability at 1.5 years and 5 years
+
+summary(overall_km, times = c(1.5, 5))
+
+#### Kaplan Meier plot for event (secondary MI) comparing usual care and SGLT2 arms ####
+
+# Turning allocation into a factor and specifying reference (Usual care)
+
+SGLT2$alloc_factor <- factor(
+  SGLT2$alloc,
+  levels = c("Usual Care", "SGLT2"))
+
+# Creating KM plot based on allocation
+
+mi_arms_km <- survfit(Surv(time_years, mi_flg) ~ alloc_factor, data = SGLT2)
+
+summary(mi_arms_km)
+
+ggsurvplot(
+  mi_arms_km,
+  data = SGLT2,
+  conf.int = TRUE,
+  pval = TRUE,
+  risk.table = TRUE,
+  xlim = c(0, 5),
+  xlab = "Time (years)",
+  ylab = "Secondary MI-free Probability",
+  legend.labs = c("Usual care", "SGLT2 inhibitor"),
+  legend.title = "Treatment arms",
+  title = "Secondary MI-free Probability against Treatment Arms Kaplan-Meier Plot",
+  ggtheme = theme_minimal()
+)
+
+
+survdiff(Surv(time_years, mi_flg) ~ alloc_factor, data = SGLT2)
+
+summary(mi_arms_km, times = c(1.5, 5))
+
+
+##### Cox proportional hazards plot ####
+
+# Creating unadjusted CPH plot 
+
+cox_unadjusted <- coxph(Surv(time_years, mi_flg) ~ alloc, data = SGLT2)
+
+summary(cox_unadjusted)
+
+# Creating adjusted CPH plot
+
+cox_adjusted <- coxph(Surv(time_months, mi_flg) ~  alloc + sex + age + sbp_bl + bmi_bl, data = SGLT2)
+
+summary(cox_adjusted)
+
+
+#### Checking Schoenfeld residual test for CPH####
+
+cox.zph(cox_unadjusted)
+
+cox.zph(cox_adjusted)
+
+# Alloc violated in both tests <- already dealt with in time splits
+
+
+#### Sensitivity analyses for CPH ####
+
+# Time split model (split at 0 - 1.5 years and 1.5 - 5 years)
+
+SGLT2_split <- survSplit(data  = SGLT2,
+                         cut   = 1.5,
+                         end   = "time_years",
+                         event = "mi_flg",
+                         start = "tstart",
+                         id    = "split_id")
+
+SGLT2_split$period <- ifelse(SGLT2_split$tstart == 0,
+  "Early (<1.5y)",
+  "Late (>=1.5y)")
+
+
+SGLT2_split$period <- factor(
+  SGLT2_split$period,
+  levels = c("Early (<1.5y)", "Late (>=1.5y)")
+)
+
+cox_time_adj <- coxph(Surv(tstart, time_years, mi_flg) ~ alloc * period + sex + age + sbp_bl + bmi_bl, data = SGLT2_split)
+
+summary(cox_time_adj)
+
+# calculating late period alloc HR and CIs
+
+b <- coef(cox_time_adj)
+V <- vcov(cox_time_adj)
+
+beta_early <- b["allocUsual Care"]
+beta_int  <- b["allocUsual Care:periodLate (>=1.5y)"]
+
+beta_late <- beta_early + beta_int
+
+se_late <- sqrt(
+  V["allocUsual Care","allocUsual Care"] +
+    V["allocUsual Care:periodLate (>=1.5y)","allocUsual Care:periodLate (>=1.5y)"] +
+    2*V["allocUsual Care","allocUsual Care:periodLate (>=1.5y)"]
+)
+
+HR_late <- exp(beta_late)
+CI_late <- exp(beta_late + c(-1,1)*1.96*se_late)
+
+HR_late
+CI_late
+
+# Creating interaction between treatment arm and sex
+
+cox_sex <- coxph(Surv(time_years, mi_flg) ~   alloc + sex + age + sbp_bl + bmi_bl + alloc * sex, data = SGLT2)
+
+summary(cox_sex)
+
+# SE and HR
+
+se <- sqrt((0.250156**2) + (0.264194**2))
+log_hr <-  0.142948 + 0.129070 
+
+exp(log_hr)
+
+# 95% CI
+
+exp(log_hr - se * 1.96)
+exp(log_hr + se * 1.96)
+
+##### CPH model fit check (analysis of deviance) ####
+
+# SGLT2 effect varies over time --> cox_time_adj
+
+# create SGLT effect is constant model
+
+cox_constant <- coxph(Surv(tstart, time_years, mi_flg) ~ alloc + period + sex + age + sbp_bl + bmi_bl, data = SGLT2_split)
+
+anova(cox_constant, cox_time_adj, test = "LRT")
+
