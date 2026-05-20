@@ -3,6 +3,9 @@ Pipeline to investigate the effect of SGLT2 inhibitor use within cohort
 
 ### This project was based on synthetic data and is pipelined to run efficiently in R. Data needs to be loaded to local prior to project commencement. 
 
+## Project structure
+
+
 # There are 3 aims for this project
 
 ## Aim 1: 
