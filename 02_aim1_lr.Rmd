@@ -1,0 +1,95 @@
+# libraries
+
+library(car)
+
+#### Logistic regression for aim 1 ####
+
+# No crude analysis as variables are being treated as "predictor" variables
+
+adherence_char_fit <- glm(adherence_flg ~ bmi_bl + age + sex, family = "binomial", data = SGLT2_only)
+summary(adherence_char_fit)
+
+exp(coef(adherence_char_fit))
+exp(confint.default(adherence_char_fit))
+
+#### Sensitivity analysis ####
+
+# Do our observations hold when restricting bmi to overweight> individuals
+
+SGLT2_BMI_25 <- SGLT2_only%>%
+  filter(bmi_bl >= 25.0)
+
+fit_sensitivity <- glm(adherence_flg ~ bmi_bl + age + sex, family = "binomial", data = SGLT2_BMI_25)
+summary(fit_sensitivity)
+
+exp(coef(fit_sensitivity))
+exp(confint.default(fit_sensitivity))
+
+# comparing bmi cat against bmi continuous to check for non linearity
+
+SGLT2_only$bmi_cat <- cut(
+  SGLT2_only$bmi_bl,
+  breaks = c(-Inf, 25, 30, Inf),
+  labels = c("Normal weight (<25)", "Overweight (25-29.9)", "Obese (≥30)"),
+  right = FALSE
+)
+
+fit_cat <- glm(adherence_flg ~ bmi_cat + age + sex, family = "binomial", data = SGLT2_only)
+summary(fit_cat)
+
+exp(coef(fit_cat))
+exp(confint.default(fit_cat))
+
+#### Logistic regression model assumption checks #####
+
+# Calculating vif values
+
+vif(adherence_char_fit)
+
+type = "predictor"
+
+# Creating log odds graphs for age and bmi
+
+# Age log odds
+
+SGLT2_only <- SGLT2_only %>%
+  mutate(age_decile = ntile(age, 10))
+
+age_logodds <- SGLT2_only %>%
+  group_by(age_decile) %>%
+  summarise(
+    mean_age = mean(age),
+    p_adherence = mean(adherence_flg)
+  ) %>%
+  mutate(log_odds = log(p_adherence / (1 - p_adherence)))
+
+plot(age_logodds$mean_age, age_logodds$log_odds,
+     xlab = "Mean age (years)",
+     ylab = "Log-odds of adherence",
+     pch = 16,
+     main = "Log-odds of adherence vs Age")
+
+abline(lm(log_odds ~ mean_age, data = age_logodds),
+       col = "red", lwd = 2)
+
+
+
+# Bmi cat logs
+
+bmi_logodds_cat <- SGLT2_only %>%
+  group_by(bmi_cat) %>%
+  summarise(
+    mean_bmi = mean(bmi_bl),
+    p_adherence = mean(adherence_flg)
+  ) %>%
+  mutate(log_odds = log(p_adherence / (1 - p_adherence)))
+
+
+plot(bmi_logodds_cat$mean_bmi, bmi_logodds_cat$log_odds,
+     xlab = "Mean BMI (kg/m²)",
+     ylab = "Log-odds of adherence",
+     pch = 16,
+     main = "Log-odds of adherence by BMI category")
+
+abline(lm(log_odds ~ mean_bmi, data = bmi_logodds_cat),
+       col = "red", lwd = 2)
