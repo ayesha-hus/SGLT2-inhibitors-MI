@@ -1,0 +1,87 @@
+# Data cleaning 
+
+# load all libraries
+
+library(readr)
+library(tidyverse)
+library(tableone)
+
+# load data
+
+SGLT2 <- read.csv("mi_sglt2.csv")
+View(SGLT2)
+
+# This file cleans and analyses the dataset "mi_sglt2" 
+
+#### Creating SGLT2 only dataset for table 1 ####
+# Creating the SGLT2_only dataset
+
+SGLT2_only <- SGLT2%>%
+  filter(alloc == "SGLT2")
+
+#### Table 1 ####
+# Table 1 for the overall dataset and study (characteristics in this study)
+
+vars_all <- c("sex", "age", "bmi_bl", "sbp_bl")
+
+catVars_all <- c("sex")
+
+table1_all <- CreateTableOne(
+  vars = vars_all,
+  strata = "alloc",           
+  data = SGLT2,
+  factorVars = catVars_all
+)
+
+print(table1_all, showAllLevels = TRUE)
+View(table1_all)
+
+# Table 1 for SGLT2_only 
+
+vars <- c("sex", "age", "bmi_bl")
+
+catVars <- c("sex")
+
+table1 <- CreateTableOne(
+  vars = vars,
+  strata = "adherence_flg",           
+  data = SGLT2_only,
+  factorVars = catVars
+)
+
+print(table1, showAllLevels = TRUE)
+View(table1)
+
+#### Chi Square for sex  ####
+
+# Sex chi square
+
+sex_chi <- matrix(c(124, 26, 689, 158), nrow = 2, byrow = TRUE,
+                  dimnames = list(sex = c("Female", "Male"),
+                                  adherence_flg = c(1, 0)))
+
+chisq.test(sex_chi, correct = FALSE)$expected
+
+sex_chi_test <- chisq.test(sex_chi)
+sex_chi_test
+
+
+#### T test for age and bmi_bl against adherence ####
+
+# T test for age
+
+t.test(age ~ adherence_flg, data = SGLT2_only)
+
+# T test for bmi_bl
+
+t.test(bmi_bl ~ adherence_flg, data = SGLT2_only)
+
+#### Logistic regression for aim 1 ####
+
+# No crude analysis as variables are being treated as "predictor" variables
+
+adherence_char_fit <- glm(adherence_flg ~ bmi_bl + age + sex, family = "binomial", data = SGLT2_only)
+summary(adherence_char_fit)
+
+exp(coef(adherence_char_fit))
+exp(confint.default(adherence_char_fit))
