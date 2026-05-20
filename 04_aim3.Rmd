@@ -1,0 +1,110 @@
+##### linear regression plot (adjusted with baseline sbp) ####
+
+# Creating lm fit
+
+sbp_fit <- lm(sbp_fup ~ alloc + sbp_bl, data = SGLT2)
+
+summary(sbp_fit)
+confint(sbp_fit)
+
+confint(lm(sbp_fup ~ alloc, data = SGLT2))
+# Plot lm fit
+
+ggplot(SGLT2, aes(x = sbp_bl, y = sbp_fup, colour = alloc)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "lm", se = TRUE) +
+  labs(
+    x = "Baseline systolic blood pressure (mmHg)",
+    y = "Interim systolic blood pressure (mmHg)",
+    title = "Interim SBP vs baseline SBP by treatment group"
+  ) +
+  theme_minimal()
+
+# Create adjusted model
+
+sbp_fit_adjusted <- lm(sbp_fup ~ alloc + sbp_bl + age + sex + bmi_bl, data = SGLT2)
+summary(sbp_fit_adjusted)
+
+# confidence intervals
+
+confint(sbp_fit_adjusted)
+
+
+# Checking if doing model based on difference between means gives similar results (supportive analysis)
+
+SGLT2$sbp_diff <- SGLT2$sbp_fup - SGLT2$sbp_bl
+
+sbp_diff_fit <- lm(sbp_diff ~ alloc, data = SGLT2)
+summary(sbp_diff_fit)
+
+sbp_diff_fit_adjusted <- lm(sbp_diff ~ alloc + age + sex + bmi_bl, data = SGLT2)
+summary(sbp_diff_fit_adjusted)
+
+#### sensitivity analysis - linear regression ####
+
+# restrict bp to baseline bp > 120
+
+SBP_normal <- SGLT2%>%
+  filter(sbp_bl>120)
+
+sbp_sensitivity <- lm(sbp_fup ~ alloc + sbp_bl + age + sex + bmi_bl, data = SBP_normal)
+summary(sbp_sensitivity)
+confint(sbp_sensitivity)
+
+crude_sbp <- lm(sbp_fup ~ alloc, data = SGLT2)
+summary(crude_sbp)
+confint(crude_sbp)
+
+
+
+sbp_fit_adjusted_overweight <- lm(sbp_fup ~ alloc + sbp_bl + age + sex + bmi_bl, data = SGLT2_overweight)
+summary(sbp_fit_adjusted_overweight)
+
+confint(sbp_fit_adjusted_overweight)
+
+##### Residual analysis for linear regression ####
+
+par(mfrow = c(1, 2))
+plot(sbp_fit_adjusted, c(1:3,5))
+
+  
+#### P value basic analysis aim 3 ####
+
+library(dplyr)
+
+sbp_summary <- SGLT2 %>%
+  group_by(alloc) %>%
+  summarise(
+    mean_bl = mean(sbp_bl, na.rm = TRUE),
+    sd_bl   = sd(sbp_bl, na.rm = TRUE),
+    mean_fu = mean(sbp_fup, na.rm = TRUE),
+    sd_fu   = sd(sbp_fup, na.rm = TRUE)
+  )
+
+sbp_summary <- sbp_summary %>%
+  mutate(
+    bl = sprintf("%.1f (%.1f)", mean_bl, sd_bl),
+    fu = sprintf("%.1f (%.1f)", mean_fu, sd_fu)
+  ) %>%
+  select(alloc, bl, fu)
+
+p_bl <- t.test(sbp_bl ~ alloc, data = SGLT2)$p.value
+
+p_fu <- t.test(sbp_fup ~ alloc, data = SGLT2)$p.value
+
+final_table <- data.frame(
+  `Treatment arm` = c("SGLT2 inhibitor", "Usual care", "P value"),
+  `Mean (SD) SBP at baseline (mmHg)` = c(
+    sbp_summary$bl[sbp_summary$alloc == "SGLT2"],
+    sbp_summary$bl[sbp_summary$alloc == "Usual Care"],
+    sprintf("%.3f", p_bl)
+  ),
+  `Mean (SD) SBP at follow up (mmHg)` = c(
+    sbp_summary$fu[sbp_summary$alloc == "SGLT2"],
+    sbp_summary$fu[sbp_summary$alloc == "Usual Care"],
+    sprintf("%.3f", p_fu)
+  ),
+  check.names = FALSE
+)
+
+final_table
